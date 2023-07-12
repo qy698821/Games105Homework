@@ -27,7 +27,7 @@ def rotation_matrix_from_axis_angle(axis, angle):
 def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, target_pose):
     """
     完成函数，计算逆运动学
-    输入: 
+    输入:
         meta_data: 为了方便，将一些固定信息进行了打包，见上面的meta_data类
         joint_positions: 当前的关节位置，是一个numpy数组，shape为(M, 3)，M为关节数
         joint_orientations: 当前的关节朝向，是一个numpy数组，shape为(M, 4)，M为关节数
@@ -38,32 +38,60 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
         joint_orientations: 计算得到的关节朝向，是一个numpy数组，shape为(M, 4)，M为关节数
     """
     path_index_list, path_name_list, path1_index_list, path2_index_list = meta_data.get_path_from_root_to_end()
-    cycle_limit = 20
+    cycle_limit = 50
+    target_joint_id = path1_index_list[0]
+    error_check = 0.05
+
+    # CCD
     for i in range(cycle_limit):
         for index in range(len(path1_index_list)):
-            if index == len(path1_index_list) - 1:
-                break
-            joint_vector = joint_positions[path1_index_list[index]] - joint_positions[path1_index_list[index + 1]]
-            target_vector = target_pose - joint_positions[path1_index_list[index + 1]]
-            matrix1 = rotation_matrix(np.array([1,0,0]),np.array([1,1,0]))
-            matrix2 = rotation_matrix_from_vectors(np.array([1,0,0]),np.array([1,1,0]))
+            if index == 0:
+                continue
+            joint_index = path1_index_list[index]
+            joint_vector = joint_positions[target_joint_id] - joint_positions[joint_index]
+            target_vector = target_pose - joint_positions[joint_index]
+            matrix = rotation_matrix_from_vectors(joint_vector, target_vector)
+            joint_orientation = R.from_quat(joint_orientations[joint_index]).as_matrix()
+            matrix_format = R.from_matrix(matrix).as_matrix()
+            joint_orientations[joint_index] = R.from_matrix(matrix_format.dot(joint_orientation)).as_quat()
+
+            # calculate the children joints
+            child_i = index - 1
+            while child_i >= 0:
+                child_joint_id = path1_index_list[child_i]
+                if child_i != 0:
+                    # children orientation calculate
+                    child_orientation = R.from_quat(joint_orientations[child_joint_id]).as_matrix()
+                    joint_orientations[child_joint_id] = R.from_matrix(matrix_format.dot(child_orientation)).as_quat()
+
+                # Children position calculate
+                child_vector = joint_positions[child_joint_id] - joint_positions[joint_index]
+                # rotate the vector
+                child_vector_new = matrix.dot(child_vector)
+                joint_positions[child_joint_id] = child_vector_new + joint_positions[joint_index]
+                child_i -= 1
+        current_error = np.linalg.norm(joint_positions[target_joint_id] - target_pose)
+        if current_error < error_check:
+            print("total calculate : ", i, )
+            break
 
 
 
 
-    
+
+
     return joint_positions, joint_orientations
 
 def part2_inverse_kinematics(meta_data, joint_positions, joint_orientations, relative_x, relative_z, target_height):
     """
     输入lWrist相对于RootJoint前进方向的xz偏移，以及目标高度，IK以外的部分与bvh一致
     """
-    
+
     return joint_positions, joint_orientations
 
 def bonus_inverse_kinematics(meta_data, joint_positions, joint_orientations, left_target_pose, right_target_pose):
     """
     输入左手和右手的目标位置，固定左脚，完成函数，计算逆运动学
     """
-    
+
     return joint_positions, joint_orientations
