@@ -40,10 +40,15 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
     path_index_list, path_name_list, path1_index_list, path2_index_list = meta_data.get_path_from_root_to_end()
     cycle_limit = 50
     target_joint_id = path1_index_list[0]
-    error_check = 0.05
+    error_check = 0.01
+    parent_index_list = meta_data.joint_parent
+
+    original_positions = np.copy(joint_positions)
+    original_orientations = np.copy(joint_orientations)
 
     # CCD
     for i in range(cycle_limit):
+        # path1
         for index in range(len(path1_index_list)):
             if index == 0:
                 continue
@@ -70,14 +75,53 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
                 child_vector_new = matrix.dot(child_vector)
                 joint_positions[child_joint_id] = child_vector_new + joint_positions[joint_index]
                 child_i -= 1
+        # # path2
+        # for index in range(len(path2_index_list)-1,0,-1):
+        #     joint_index = path2_index_list[index]
+        #     joint_vector = joint_positions[target_joint_id] - joint_positions[joint_index]
+        #     target_vector = target_pose - joint_positions[joint_index]
+        #     matrix = rotation_matrix_from_vectors(joint_vector, target_vector)
+        #     joint_orientation = R.from_quat(joint_orientations[joint_index]).as_matrix()
+        #     matrix_format = R.from_matrix(matrix).as_matrix()
+        #     joint_orientations[joint_index] = R.from_matrix(matrix_format.dot(joint_orientation)).as_quat()
+        #
+        #     # calculate the children joints
+        #     child_i = index - 1
+        #     while child_i >= 0:
+        #         child_joint_id = path2_index_list[child_i]
+        #         if child_i != 0:
+        #             # children orientation calculate
+        #             child_orientation = R.from_quat(joint_orientations[child_joint_id]).as_matrix()
+        #             joint_orientations[child_joint_id] = R.from_matrix(matrix_format.dot(child_orientation)).as_quat()
+        #
+        #         # Children position calculate
+        #         child_vector = joint_positions[child_joint_id] - joint_positions[joint_index]
+        #         # rotate the vector
+        #         child_vector_new = matrix.dot(child_vector)
+        #         joint_positions[child_joint_id] = child_vector_new + joint_positions[joint_index]
+        #         child_i -= 1
+
         current_error = np.linalg.norm(joint_positions[target_joint_id] - target_pose)
         if current_error < error_check:
             print("total calculate : ", i, )
             break
+    # calculate other joint rotation and position
+    for i in range(len(joint_orientations)):
+        if i in path_index_list:
+            continue
+        joint_original_rot_matrix = R.from_quat(original_orientations[i]).as_matrix()
+        joint_local_rot = np.linalg.inv(R.from_quat(original_orientations[parent_index_list[i]]).as_matrix()) * joint_original_rot_matrix
+        parent_rot_matrix = R.from_quat(joint_orientations[parent_index_list[i]]).as_matrix()
+        new_rot_matrix = parent_rot_matrix.dot(joint_local_rot)
+        joint_orientations[i] = R.from_matrix(new_rot_matrix).as_quat()
 
 
-
-
+        parent_original_rot_matrix = R.from_quat(original_orientations[parent_index_list[i]]).as_matrix()
+        parent_original_position = original_positions[parent_index_list[i]]
+        joint_original_position = original_positions[i]
+        joint_local_position = joint_original_position - parent_original_position
+        delta_orientation = np.dot(new_rot_matrix, np.linalg.inv(parent_original_rot_matrix))
+        joint_positions[i] = joint_positions[parent_index_list[i]] + delta_orientation.dot(joint_local_position)
 
 
     return joint_positions, joint_orientations
