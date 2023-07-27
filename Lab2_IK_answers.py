@@ -85,6 +85,8 @@ def calculate_other_joints(joint_orientations, path_index_list, original_orienta
     for i in range(len(joint_orientations)):
         if i in path_index_list:
             continue
+        if i == 0:
+            continue
         joint_original_rot_matrix = R.from_quat(original_orientations[i]).as_matrix()
         joint_local_rot = np.linalg.inv(
             R.from_quat(original_orientations[parent_index_list[i]]).as_matrix()).dot(joint_original_rot_matrix)
@@ -96,8 +98,8 @@ def calculate_other_joints(joint_orientations, path_index_list, original_orienta
         parent_original_position = original_positions[parent_index_list[i]]
         joint_original_position = original_positions[i]
         joint_local_position = joint_original_position - parent_original_position
-        delta_orientation = np.dot(new_rot_matrix, np.linalg.inv(parent_original_rot_matrix))
-        joint_positions[i] = joint_positions[parent_index_list[i]] + delta_orientation.dot(joint_local_position)
+        offset = np.linalg.inv(parent_original_rot_matrix).dot(joint_local_position)
+        joint_positions[i] = joint_positions[parent_index_list[i]] + parent_rot_matrix.dot(offset)
     return joint_positions, joint_orientations
 
 def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, target_pose):
@@ -134,6 +136,7 @@ def part2_inverse_kinematics(meta_data, joint_positions, joint_orientations, rel
     """
     # wip........
     target_pose = np.array([joint_positions[0][0] + relative_x, target_height, joint_positions[0][2] + relative_z])
+
     path_index_list, path_name_list, path1_index_list, path2_index_list = meta_data.get_path_from_root_to_end()
     target_joint_id = path1_index_list[0]
     parent_index_list = meta_data.joint_parent
@@ -143,18 +146,18 @@ def part2_inverse_kinematics(meta_data, joint_positions, joint_orientations, rel
     original_positions = np.copy(joint_positions)
     original_orientations = np.copy(joint_orientations)
 
+    # At this case, all the joints are on a chain, and in the same direction relative to the root node, so I think the path2 list shouldn't have value
+    path2_index_list = []
+
     joint_positions, joint_orientations = ccd(path_index_list_reversed, target_joint_id, joint_positions, target_pose,
                                               joint_orientations, path2_index_list)
-    last_joint_id = parent_index_list[path_index_list[0]]
-    next_joint_id = 12
-    no_need_joints = []
-    for i in range(len(joint_orientations)):
-        if i != next_joint_id:
-            no_need_joints.append(i)
-    joint_positions, joint_orientations = calculate_other_joints(joint_orientations, no_need_joints,
+
+    # Remove the target joint's orientations( hard code )
+    joint_orientations[target_joint_id] = joint_orientations[parent_index_list[target_joint_id]]
+
+    joint_positions, joint_orientations = calculate_other_joints(joint_orientations, path_index_list,
                                                                  original_orientations, parent_index_list,
                                                                  original_positions, joint_positions)
-
 
 
     return joint_positions, joint_orientations
